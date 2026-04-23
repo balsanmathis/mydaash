@@ -27,13 +27,15 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
 
-    if (user.subscription_status !== 'active') {
-      return res.status(403).json({ error: 'Abonnement inactif' });
-    }
-
+    // Vérification mot de passe
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    // Admin bypass — pas besoin d'abonnement actif
+    if (user.role !== 'admin' && user.subscription_status !== 'active') {
+      return res.status(403).json({ error: 'Abonnement inactif' });
     }
 
     const token = jwt.sign(
@@ -59,3 +61,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }
+
