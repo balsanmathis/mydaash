@@ -2,17 +2,165 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 
+const THEMES = [
+  { id: 'violet', accent: '#7C3AED', light: '#A78BFA', bg: '#080612', card: '#110D20', card2: '#1A1530', border: '#2D2550' },
+  { id: 'emerald', accent: '#10B981', light: '#6EE7B7', bg: '#071912', card: '#0D2420', card2: '#132E28', border: '#1A4030' },
+  { id: 'blue', accent: '#3B82F6', light: '#93C5FD', bg: '#03080F', card: '#071525', card2: '#0D1E35', border: '#1A3050' },
+  { id: 'rose', accent: '#F43F5E', light: '#FDA4AF', bg: '#150610', card: '#231020', card2: '#2E1528', border: '#4A1535' },
+];
+
+const WIDGET_TYPES = [
+  { id: 'metric', label: 'Métrique', icon: '◈' },
+  { id: 'bar', label: 'Barres', icon: '▦' },
+  { id: 'line', label: 'Courbe', icon: '◝' },
+  { id: 'pie', label: 'Camembert', icon: '◕' },
+  { id: 'table', label: 'Tableau', icon: '▤' },
+  { id: 'progress', label: 'Progrès', icon: '▬' },
+];
+
+function WidgetPreview({ widget, accent }) {
+  const bars = [40, 60, 35, 80, 55, 90, 70];
+  if (widget.type === 'metric') return (
+    <div>
+      <div style={{ fontSize: 10, color: '#6B5E8A', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{widget.title || 'Métrique'}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: '#EDE9FE' }}>{widget.value || '0'}</div>
+      {widget.subtitle && <div style={{ fontSize: 11, color: accent, marginTop: 4 }}>{widget.subtitle}</div>}
+    </div>
+  );
+  if (widget.type === 'bar') return (
+    <div>
+      <div style={{ fontSize: 10, color: '#6B5E8A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{widget.title || 'Barres'}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 44 }}>
+        {bars.map((v, i) => <div key={i} style={{ flex: 1, background: i === bars.length - 1 ? accent : accent + '55', borderRadius: '2px 2px 0 0', height: `${Math.round(v * 0.55)}px` }} />)}
+      </div>
+    </div>
+  );
+  if (widget.type === 'line') return (
+    <div>
+      <div style={{ fontSize: 10, color: '#6B5E8A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{widget.title || 'Courbe'}</div>
+      <svg width="100%" height="44" viewBox="0 0 200 44">
+        <polyline fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" points="0,36 30,28 60,32 90,16 120,20 150,8 200,12" />
+        <polygon fill={accent + '22'} points="0,44 0,36 30,28 60,32 90,16 120,20 150,8 200,12 200,44" />
+      </svg>
+    </div>
+  );
+  if (widget.type === 'pie') return (
+    <div>
+      <div style={{ fontSize: 10, color: '#6B5E8A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{widget.title || 'Camembert'}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <svg width="44" height="44" viewBox="0 0 48 48">
+          <path d="M24,24 L24,4 A20,20 0 0,1 44,24 Z" fill={accent} />
+          <path d="M24,24 L44,24 A20,20 0 0,1 14,41 Z" fill={accent + '88'} />
+          <path d="M24,24 L14,41 A20,20 0 0,1 4,24 Z" fill={accent + '55'} />
+          <path d="M24,24 L4,24 A20,20 0 0,1 24,4 Z" fill={accent + '33'} />
+        </svg>
+        <div style={{ fontSize: 10, color: '#6B5E8A' }}>4 segments</div>
+      </div>
+    </div>
+  );
+  if (widget.type === 'progress') return (
+    <div>
+      <div style={{ fontSize: 10, color: '#6B5E8A', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{widget.title || 'Progrès'}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: '#EDE9FE' }}>{widget.value || 0}%</div>
+      <div style={{ height: 6, background: '#6B5E8A33', borderRadius: 3 }}>
+        <div style={{ height: 6, background: accent, borderRadius: 3, width: `${widget.value || 0}%` }} />
+      </div>
+    </div>
+  );
+  return <div style={{ fontSize: 12, color: '#6B5E8A' }}>{widget.title || widget.type}</div>;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('overview');
+  const [themeId, setThemeId] = useState('violet');
+  const [dashboards, setDashboards] = useState([]);
+  const [commissions, setCommissions] = useState([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [allUsers, setAllUsers] = useState([]);
+  const [selectedDash, setSelectedDash] = useState(null);
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [newDashName, setNewDashName] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
 
   useEffect(() => {
     const stored = localStorage.getItem('mydaash_user');
     const token = localStorage.getItem('mydaash_token');
     if (!stored || !token) { router.push('/login'); return; }
-    setUser(JSON.parse(stored));
+    const u = JSON.parse(stored);
+    setUser(u);
+    fetchData(u, token);
   }, []);
+
+  const fetchData = async (u, token) => {
+    try {
+      const res = await fetch('/api/data', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setDashboards(data.dashboards || []);
+        setCommissions(data.commissions || []);
+        setTotalRevenue(data.totalRevenue || 0);
+        if (u.role === 'admin') setAllUsers(data.allUsers || []);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const createDashboard = async () => {
+    if (!newDashName.trim()) return;
+    const token = localStorage.getItem('mydaash_token');
+    const res = await fetch('/api/dashboards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ name: newDashName, theme: themeId, widgets: [] })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setDashboards(prev => [...prev, data.dashboard]);
+      setNewDashName('');
+      setShowBuilder(false);
+    }
+  };
+
+  const deleteDashboard = async (id) => {
+    const token = localStorage.getItem('mydaash_token');
+    await fetch(`/api/dashboards?id=${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+    setDashboards(prev => prev.filter(d => d.id !== id));
+    if (selectedDash?.id === id) setSelectedDash(null);
+  };
+
+  const addWidget = async (dash, type) => {
+    const token = localStorage.getItem('mydaash_token');
+    const newWidget = { id: Date.now().toString(), type, title: WIDGET_TYPES.find(w => w.id === type)?.label, value: type === 'progress' ? 50 : '0', subtitle: '' };
+    const updated = { ...dash, widgets: [...(dash.widgets || []), newWidget] };
+    await fetch('/api/dashboards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(updated)
+    });
+    setDashboards(prev => prev.map(d => d.id === dash.id ? updated : d));
+    setSelectedDash(updated);
+  };
+
+  const removeWidget = async (dash, widgetId) => {
+    const token = localStorage.getItem('mydaash_token');
+    const updated = { ...dash, widgets: dash.widgets.filter(w => w.id !== widgetId) };
+    await fetch('/api/dashboards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(updated)
+    });
+    setDashboards(prev => prev.map(d => d.id === dash.id ? updated : d));
+    setSelectedDash(updated);
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(`https://mydaash.vercel.app/subscribe?ref=${user?.referralCode}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const logout = () => {
     localStorage.removeItem('mydaash_token');
@@ -23,6 +171,7 @@ export default function Dashboard() {
   if (!user) return null;
 
   const isAdmin = user.role === 'admin';
+  const monthRevenue = commissions.reduce((s, c) => s + parseFloat(c.amount || 0), 0).toFixed(2);
 
   const navItems = [
     { id: 'overview', icon: '▦', label: 'Vue générale' },
@@ -32,247 +181,299 @@ export default function Dashboard() {
     ...(isAdmin ? [{ id: 'admin', icon: '⊞', label: 'Tous les clients' }] : []),
   ];
 
+  const s = {
+    app: { display: 'flex', height: '100vh', overflow: 'hidden' },
+    sidebar: { width: 210, background: theme.card, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 },
+    main: { flex: 1, overflowY: 'auto', padding: 24, background: theme.bg },
+    section: { background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 18, marginBottom: 16 },
+    metric: { background: theme.card2, borderRadius: 10, padding: 14 },
+    grid4: { display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 },
+    btnPrimary: { background: theme.accent, color: 'white', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' },
+    btnOutline: { background: 'transparent', border: `1px solid ${theme.border}`, color: '#6B5E8A', fontSize: 11, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' },
+    empty: { textAlign: 'center', padding: '40px 20px', color: '#6B5E8A' },
+  };
+
   return (
     <>
       <Head>
-        <title>MyDaash — Dashboard</title>
-        <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+        <title>MyDaash</title>
+        <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
       </Head>
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-          --accent: #7C3AED; --accent-light: #A78BFA;
-          --bg: #080612; --card: #110D20; --card2: #1A1530;
-          --text: #EDE9FE; --muted: #6B5E8A; --border: #2D2550;
-          --success: #10B981; --warning: #F59E0B;
-        }
-        body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; margin: 0; }
-        .app { display: flex; height: 100vh; overflow: hidden; }
-        .sidebar { width: 210px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 0; flex-shrink: 0; }
-        .logo { padding: 20px 16px; font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; border-bottom: 1px solid var(--border); }
-        .logo span { color: var(--accent-light); }
-        .nav { flex: 1; padding: 12px 0; }
-        .nav-section { font-size: 9px; color: var(--muted); padding: 10px 16px 4px; text-transform: uppercase; letter-spacing: 0.08em; }
-        .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: var(--muted); cursor: pointer; transition: background 0.1s; }
-        .nav-item:hover { background: var(--card2); color: var(--text); }
-        .nav-item.active { background: #7C3AED22; color: var(--accent-light); border-right: 2px solid var(--accent); }
-        .nav-icon { font-size: 14px; width: 16px; text-align: center; }
-        .sidebar-footer { padding: 14px 16px; border-top: 1px solid var(--border); }
-        .user-row { display: flex; align-items: center; gap: 10px; }
-        .avatar { width: 30px; height: 30px; border-radius: 50%; background: #7C3AED22; border: 1px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--accent-light); flex-shrink: 0; }
-        .user-info { flex: 1; min-width: 0; }
-        .user-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .user-role { font-size: 10px; color: var(--muted); }
-        .logout-btn { font-size: 11px; color: var(--muted); cursor: pointer; background: none; border: none; padding: 0; font-family: 'DM Sans', sans-serif; }
-        .logout-btn:hover { color: var(--text); }
-        .main { flex: 1; overflow-y: auto; padding: 24px; }
-        .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-        .page-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; }
-        .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
-        .badge-admin { background: #7C3AED22; color: var(--accent-light); border: 1px solid var(--accent); }
-        .badge-client { background: #10B98122; color: var(--success); border: 1px solid var(--success); }
-        .cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-        .metric { background: var(--card2); border-radius: 10px; padding: 14px; }
-        .metric-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-        .metric-value { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 700; }
-        .metric-sub { font-size: 11px; color: var(--success); margin-top: 4px; }
-        .section { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
-        .section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; font-family: 'Syne', sans-serif; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th { text-align: left; padding: 6px 8px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 10px; text-transform: uppercase; }
-        td { padding: 9px 8px; color: var(--text); border-bottom: 1px solid var(--border); }
-        tr:last-child td { border-bottom: none; }
-        .status { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
-        .status-active { background: #10B98122; color: var(--success); }
-        .status-inactive { background: #F59E0B22; color: var(--warning); }
-        .ref-code { background: #7C3AED22; color: var(--accent-light); font-family: monospace; font-size: 14px; font-weight: 700; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--accent); display: inline-block; letter-spacing: 0.1em; }
-        .mini-bar { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
-        .bar { background: var(--accent); border-radius: 2px 2px 0 0; width: 100%; opacity: 0.7; }
-        .bar:last-child { opacity: 1; }
-        .copy-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 11px; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
-        .copy-btn:hover { border-color: var(--accent); color: var(--accent-light); }
-        .step { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
-        .step-num { width: 24px; height: 24px; border-radius: 50%; background: #7C3AED22; color: var(--accent-light); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--accent); }
-        .step-text h4 { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
-        .step-text p { font-size: 11px; color: var(--muted); }
-      `}</style>
+      <style>{`*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:${theme.bg};color:#EDE9FE;font-family:'DM Sans',sans-serif}input[type=text]{background:${theme.card2};border:1px solid ${theme.border};border-radius:8px;padding:9px 12px;color:#EDE9FE;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%}input[type=text]:focus{border-color:${theme.accent}}table{width:100%;border-collapse:collapse;font-size:12px}th{text-align:left;padding:6px 8px;color:#6B5E8A;font-weight:500;border-bottom:1px solid ${theme.border};font-size:10px;text-transform:uppercase}td{padding:9px 8px;border-bottom:1px solid ${theme.border}}tr:last-child td{border-bottom:none}`}</style>
 
-      <div className="app">
-        <div className="sidebar">
-          <div className="logo">My<span>Daash</span></div>
-          <div className="nav">
-            <div className="nav-section">Menu</div>
+      <div style={s.app}>
+        {/* SIDEBAR */}
+        <div style={s.sidebar}>
+          <div style={{ padding: '20px 16px', fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 800, borderBottom: `1px solid ${theme.border}` }}>
+            My<span style={{ color: theme.light }}>Daash</span>
+          </div>
+          <div style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
+            <div style={{ fontSize: 9, color: '#6B5E8A', padding: '10px 16px 4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Menu</div>
             {navItems.map(item => (
-              <div key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => setPage(item.id)}>
-                <span className="nav-icon">{item.icon}</span>
-                {item.label}
+              <div key={item.id} onClick={() => { setPage(item.id); setSelectedDash(null); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', fontSize: 13, color: page === item.id ? theme.light : '#6B5E8A', cursor: 'pointer', background: page === item.id ? theme.accent + '22' : 'transparent', borderRight: page === item.id ? `2px solid ${theme.accent}` : '2px solid transparent' }}>
+                <span style={{ fontSize: 14, width: 16, textAlign: 'center' }}>{item.icon}</span>{item.label}
               </div>
             ))}
-          </div>
-          <div className="sidebar-footer">
-            <div className="user-row">
-              <div className="avatar">{user.fullName?.charAt(0).toUpperCase() || 'U'}</div>
-              <div className="user-info">
-                <div className="user-name">{user.fullName}</div>
-                <div className="user-role">{isAdmin ? 'Administrateur' : 'Client'}</div>
-              </div>
-              <button className="logout-btn" onClick={logout}>↩</button>
+            <div style={{ fontSize: 9, color: '#6B5E8A', padding: '14px 16px 6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Thème</div>
+            <div style={{ display: 'flex', gap: 8, padding: '0 16px' }}>
+              {THEMES.map(t => (
+                <div key={t.id} onClick={() => setThemeId(t.id)}
+                  style={{ width: 20, height: 20, borderRadius: '50%', background: t.accent, cursor: 'pointer', border: `2px solid ${themeId === t.id ? 'white' : 'transparent'}` }} />
+              ))}
             </div>
+          </div>
+          <div style={{ padding: '14px 16px', borderTop: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: theme.accent + '22', border: `1px solid ${theme.accent}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: theme.light, flexShrink: 0 }}>
+              {user.fullName?.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.fullName}</div>
+              <div style={{ fontSize: 10, color: '#6B5E8A' }}>{isAdmin ? 'Admin' : 'Pro'}</div>
+            </div>
+            <button onClick={logout} style={{ background: 'none', border: 'none', color: '#6B5E8A', cursor: 'pointer', fontSize: 16 }}>↩</button>
           </div>
         </div>
 
-        <div className="main">
-          <div className="topbar">
-            <div className="page-title">{navItems.find(n => n.id === page)?.label}</div>
-            <span className={`badge ${isAdmin ? 'badge-admin' : 'badge-client'}`}>{isAdmin ? '⊞ Admin' : '✦ Pro'}</span>
+        {/* MAIN */}
+        <div style={s.main}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 700 }}>{navItems.find(n => n.id === page)?.label}</div>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600, background: theme.accent + '22', color: theme.light, border: `1px solid ${theme.accent}` }}>{isAdmin ? '⊞ Admin' : '✦ Pro'}</span>
           </div>
 
-          {page === 'overview' && (
-            <>
-              <div className="cards-grid">
-                <div className="metric"><div className="metric-label">Revenus ce mois</div><div className="metric-value">{isAdmin ? '566 €' : '7,99 €'}</div><div className="metric-sub">↑ +12% vs mois dernier</div></div>
-                <div className="metric"><div className="metric-label">{isAdmin ? 'Clients totaux' : 'Filleuls actifs'}</div><div className="metric-value">{isAdmin ? '142' : '2'}</div><div className="metric-sub">↑ {isAdmin ? '+12 ce mois' : '+1 ce mois'}</div></div>
-                <div className="metric"><div className="metric-label">Dashboards créés</div><div className="metric-value">{isAdmin ? '348' : '3'}</div></div>
-                <div className="metric"><div className="metric-label">{isAdmin ? 'Revenu net' : 'Abonnement'}</div><div className="metric-value" style={{fontSize:16,paddingTop:6}}>{isAdmin ? '424 €' : <span className="status status-active">Actif</span>}</div></div>
-              </div>
-              <div className="section">
-                <div className="section-title">Activité récente</div>
-                <div style={{display:'flex',alignItems:'flex-end',gap:4,height:60}}>
-                  {[40,55,35,70,60,80,65,90,75,95,70,100].map((v,i) => (
-                    <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
-                      <div className="bar" style={{height:`${Math.round(v*0.55)}px`}}/>
-                      <span style={{fontSize:8,color:'var(--muted)'}}>{['J','F','M','A','M','J','J','A','S','O','N','D'][i]}</span>
+          {/* OVERVIEW */}
+          {page === 'overview' && <>
+            <div style={s.grid4}>
+              {[
+                { label: 'Revenus ce mois', value: `${monthRevenue} €`, sub: commissions.length ? `${commissions.length} filleul(s)` : 'Partage ton code !' },
+                { label: 'Filleuls actifs', value: commissions.length, sub: commissions.length ? `+${(commissions.length).toFixed(0)} €/mois` : 'Aucun encore' },
+                { label: 'Dashboards', value: dashboards.length, sub: dashboards.length ? 'créé(s)' : 'Crée le tien !' },
+                { label: 'Abonnement', value: null, sub: null },
+              ].map((m, i) => (
+                <div key={i} style={s.metric}>
+                  <div style={{ fontSize: 10, color: '#6B5E8A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{m.label}</div>
+                  {i === 3 ? <span style={{ background: '#10B98122', color: '#10B981', fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600, marginTop: 6, display: 'inline-block' }}>Actif</span>
+                    : <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 700 }}>{m.value}</div>}
+                  {m.sub && <div style={{ fontSize: 11, color: '#10B981', marginTop: 4 }}>{m.sub}</div>}
+                </div>
+              ))}
+            </div>
+            <div style={s.section}>
+              {dashboards.length === 0 && commissions.length === 0 ? (
+                <div style={s.empty}>
+                  <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.4 }}>◫</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: '#EDE9FE', marginBottom: 8 }}>Bienvenue sur MyDaash !</div>
+                  <div style={{ fontSize: 13, marginBottom: 20 }}>Crée ton premier dashboard ou partage ton code pour commencer à gagner.</div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                    <button style={s.btnPrimary} onClick={() => setPage('dashboards')}>Créer un dashboard</button>
+                    <button style={s.btnOutline} onClick={() => setPage('parrainage')}>Mon code parrainage</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Derniers dashboards</div>
+                  {dashboards.slice(0, 3).map(d => (
+                    <div key={d.id} onClick={() => { setPage('dashboards'); setSelectedDash(d); }}
+                      style={{ padding: '10px 0', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 13 }}>{d.name}</span>
+                      <span style={{ fontSize: 11, color: '#6B5E8A' }}>{d.widgets?.length || 0} blocs →</span>
                     </div>
                   ))}
-                </div>
-              </div>
-            </>
-          )}
+                </>
+              )}
+            </div>
+          </>}
 
-          {page === 'dashboards' && (
-            <>
-              <div className="section">
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-                  <div className="section-title" style={{margin:0}}>Mes dashboards</div>
-                  <button style={{background:'var(--accent)',color:'white',border:'none',padding:'7px 14px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Syne, sans-serif'}}>+ Nouveau</button>
+          {/* DASHBOARDS LIST */}
+          {page === 'dashboards' && !selectedDash && <>
+            <div style={s.section}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 600 }}>Mes dashboards ({dashboards.length})</div>
+                <button style={s.btnPrimary} onClick={() => setShowBuilder(true)}>+ Nouveau</button>
+              </div>
+              {showBuilder && (
+                <div style={{ background: theme.card2, border: `1px solid ${theme.border}`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: '#6B5E8A', marginBottom: 8 }}>Nom du dashboard</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="text" value={newDashName} onChange={e => setNewDashName(e.target.value)} placeholder="Ex: Ventes Q1 2025" onKeyDown={e => e.key === 'Enter' && createDashboard()} />
+                    <button style={s.btnPrimary} onClick={createDashboard}>Créer</button>
+                    <button style={s.btnOutline} onClick={() => setShowBuilder(false)}>Annuler</button>
+                  </div>
                 </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10}}>
-                  {['Dashboard ventes','Suivi clients','KPIs mensuels'].map((n,i) => (
-                    <div key={i} style={{background:'var(--card2)',border:'1px solid var(--border)',borderRadius:10,padding:14,cursor:'pointer'}}>
-                      <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>{n}</div>
-                      <div style={{display:'flex',alignItems:'flex-end',gap:3,height:32}}>
-                        {[50,70,45,85,60].map((v,j) => <div key={j} className="bar" style={{height:`${Math.round(v*0.35)}px`}}/>)}
+              )}
+              {dashboards.length === 0 ? (
+                <div style={s.empty}>
+                  <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>◫</div>
+                  <div style={{ fontSize: 14, color: '#EDE9FE', marginBottom: 6 }}>Aucun dashboard encore</div>
+                  <div style={{ fontSize: 12 }}>Clique "+ Nouveau" pour créer ton premier dashboard</div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  {dashboards.map(d => (
+                    <div key={d.id} style={{ background: theme.card2, border: `1px solid ${theme.border}`, borderRadius: 10, padding: 14 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{d.name}</div>
+                      <div style={{ fontSize: 11, color: '#6B5E8A', marginBottom: 12 }}>{d.widgets?.length || 0} bloc(s)</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button style={{ ...s.btnOutline, flex: 1, textAlign: 'center' }} onClick={() => setSelectedDash(d)}>Ouvrir</button>
+                        <button onClick={() => deleteDashboard(d.id)} style={{ background: '#F43F5E22', border: '1px solid #F43F5E55', color: '#F87171', fontSize: 12, padding: '4px 10px', borderRadius: 6, cursor: 'pointer' }}>×</button>
                       </div>
-                      <div style={{fontSize:10,color:'var(--muted)',marginTop:8}}>Modifié il y a {i+1}j</div>
                     </div>
                   ))}
                 </div>
-              </div>
-              <div className="section">
-                <div className="section-title">Personnalisation</div>
-                <div style={{display:'flex',gap:24,alignItems:'center'}}>
-                  <div>
-                    <div style={{fontSize:11,color:'var(--muted)',marginBottom:6}}>Couleur principale</div>
-                    <div style={{display:'flex',gap:6}}>
-                      {['#7C3AED','#10B981','#3B82F6','#F43F5E'].map(c => (
-                        <div key={c} style={{width:22,height:22,borderRadius:'50%',background:c,cursor:'pointer',border:`2px solid ${c==='#7C3AED'?'white':'transparent'}`}}/>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:11,color:'var(--muted)',marginBottom:6}}>Langue</div>
-                    <select style={{background:'var(--card2)',border:'1px solid var(--border)',color:'var(--text)',borderRadius:8,padding:'5px 8px',fontSize:12,fontFamily:'DM Sans, sans-serif'}}>
-                      <option>Français</option><option>English</option><option>Español</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+              )}
+            </div>
+          </>}
 
-          {page === 'revenus' && (
-            <>
-              <div className="cards-grid">
-                <div className="metric"><div className="metric-label">Ce mois</div><div className="metric-value">{isAdmin ? '566 €' : '7,99 €'}</div></div>
-                <div className="metric"><div className="metric-label">Total cumulé</div><div className="metric-value">{isAdmin ? '2 840 €' : '23,97 €'}</div></div>
-                <div className="metric"><div className="metric-label">{isAdmin ? 'Commissions versées' : 'Filleuls actifs'}</div><div className="metric-value">{isAdmin ? '142 €' : '2'}</div></div>
-                <div className="metric"><div className="metric-label">{isAdmin ? 'Revenu net' : 'Prochain paiement'}</div><div className="metric-value" style={{fontSize:isAdmin?24:16,paddingTop:isAdmin?0:6}}>{isAdmin ? '424 €' : 'Dans 8j'}</div></div>
+          {/* DASHBOARD BUILDER */}
+          {page === 'dashboards' && selectedDash && <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <button style={s.btnOutline} onClick={() => setSelectedDash(null)}>← Retour</button>
+              <span style={{ fontSize: 15, fontWeight: 600 }}>{selectedDash.name}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 16 }}>
+              <div style={{ ...s.section, padding: 14 }}>
+                <div style={{ fontSize: 10, color: '#6B5E8A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Ajouter un bloc</div>
+                {WIDGET_TYPES.map(w => (
+                  <button key={w.id} onClick={() => addWidget(selectedDash, w.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: '#EDE9FE', fontFamily: 'DM Sans, sans-serif', fontSize: 12, marginBottom: 6 }}>
+                    <span style={{ color: theme.accent }}>{w.icon}</span>{w.label}
+                  </button>
+                ))}
               </div>
-              <div className="section">
-                <div className="section-title">{isAdmin ? 'Revenus par mois' : 'Détail du parrainage'}</div>
-                {isAdmin ? (
-                  <table>
-                    <thead><tr><th>Mois</th><th>MRR brut</th><th>Commissions</th><th>Net</th></tr></thead>
-                    <tbody>
-                      {[['Janvier','180 €','45 €','135 €'],['Février','240 €','60 €','180 €'],['Mars','350 €','87 €','263 €'],['Avril','566 €','142 €','424 €']].map((r,i) => (
-                        <tr key={i}><td>{r[0]}</td><td>{r[1]}</td><td style={{color:'var(--warning)'}}>{r[2]}</td><td style={{color:'var(--success)',fontWeight:600}}>{r[3]}</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div>
+                {!selectedDash.widgets?.length ? (
+                  <div style={s.section}><div style={s.empty}>
+                    <div style={{ fontSize: 24, opacity: 0.4, marginBottom: 8 }}>+</div>
+                    <div style={{ fontSize: 13 }}>Ajoute des blocs depuis le panneau gauche</div>
+                  </div></div>
                 ) : (
-                  <table>
-                    <thead><tr><th>Filleul</th><th>Depuis</th><th>Statut</th><th>Gain/mois</th></tr></thead>
-                    <tbody>
-                      <tr><td>alex****@gmail.com</td><td>Jan 2025</td><td><span className="status status-active">Actif</span></td><td style={{color:'var(--success)'}}>1,00 €</td></tr>
-                      <tr><td>marie****@gmail.com</td><td>Fév 2025</td><td><span className="status status-active">Actif</span></td><td style={{color:'var(--success)'}}>1,00 €</td></tr>
-                    </tbody>
-                  </table>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {selectedDash.widgets.map(widget => (
+                      <div key={widget.id} style={{ background: theme.card2, border: `1px solid ${theme.border}`, borderRadius: 10, padding: 14, position: 'relative' }}>
+                        <button onClick={() => removeWidget(selectedDash, widget.id)}
+                          style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: '#F43F5E', border: 'none', color: 'white', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                        <WidgetPreview widget={widget} accent={theme.accent} />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            </>
-          )}
+            </div>
+          </>}
 
-          {page === 'parrainage' && (
-            <>
-              <div className="section">
-                <div className="section-title">Mon code de parrainage</div>
-                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-                  <div className="ref-code">{user.referralCode || 'CODE-ADMIN1'}</div>
-                  <button className="copy-btn" onClick={() => navigator.clipboard.writeText(`https://mydaash.vercel.app/subscribe?ref=${user.referralCode || 'CODE-ADMIN1'}`)}>
-                    Copier le lien
-                  </button>
+          {/* REVENUS */}
+          {page === 'revenus' && <>
+            <div style={s.grid4}>
+              {[
+                { label: 'Ce mois', value: `${monthRevenue} €` },
+                { label: 'Total cumulé', value: `${totalRevenue.toFixed(2)} €` },
+                { label: 'Filleuls actifs', value: commissions.length },
+                { label: 'Gain par filleul', value: '1,00 €/mois' },
+              ].map((m, i) => (
+                <div key={i} style={s.metric}>
+                  <div style={{ fontSize: 10, color: '#6B5E8A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{m.label}</div>
+                  <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 700 }}>{m.value}</div>
                 </div>
-                <div style={{fontSize:13,color:'var(--muted)'}}>Partage ce lien — tu gagnes <strong style={{color:'var(--accent-light)'}}>1€/mois</strong> pour chaque personne abonnée.</div>
-              </div>
-              <div className="section">
-                <div className="section-title">Comment ça marche</div>
-                <div className="step"><div className="step-num">1</div><div className="step-text"><h4>Partage ton lien</h4><p>Envoie ton lien de parrainage à tes contacts</p></div></div>
-                <div className="step"><div className="step-num">2</div><div className="step-text"><h4>Ils s'abonnent</h4><p>Ils créent un compte avec ton code</p></div></div>
-                <div className="step"><div className="step-num">3</div><div className="step-text"><h4>Tu gagnes</h4><p>1€ par mois tant qu'ils restent abonnés</p></div></div>
-              </div>
-            </>
-          )}
-
-          {page === 'admin' && isAdmin && (
-            <>
-              <div className="cards-grid">
-                <div className="metric"><div className="metric-label">Clients totaux</div><div className="metric-value">142</div></div>
-                <div className="metric"><div className="metric-label">Abonnements actifs</div><div className="metric-value">138</div></div>
-                <div className="metric"><div className="metric-label">MRR total</div><div className="metric-value">566 €</div></div>
-                <div className="metric"><div className="metric-label">Taux rétention</div><div className="metric-value">97%</div></div>
-              </div>
-              <div className="section">
-                <div className="section-title">Gestion des clients</div>
+              ))}
+            </div>
+            <div style={s.section}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Mes commissions</div>
+              {commissions.length === 0 ? (
+                <div style={s.empty}>
+                  <div style={{ fontSize: 28, opacity: 0.4, marginBottom: 10 }}>◈</div>
+                  <div style={{ fontSize: 13, marginBottom: 12 }}>Aucune commission encore — partage ton code !</div>
+                  <button style={s.btnPrimary} onClick={() => setPage('parrainage')}>Voir mon code →</button>
+                </div>
+              ) : (
                 <table>
-                  <thead><tr><th>Nom</th><th>Email</th><th>Parrain</th><th>Filleuls</th><th>Statut</th><th>MRR</th></tr></thead>
+                  <thead><tr><th>Filleul</th><th>Mois</th><th>Statut</th><th>Gain</th></tr></thead>
                   <tbody>
-                    {[['Lucas M.','lucas@email.com','—','3','active','3,99 €'],['Emma R.','emma@email.com','CODE-A1B2','1','active','3,99 €'],['Noah K.','noah@email.com','CODE-C3D4','0','inactive','—']].map((r,i) => (
+                    {commissions.map((c, i) => (
                       <tr key={i}>
-                        <td style={{fontWeight:500}}>{r[0]}</td>
-                        <td style={{color:'var(--muted)'}}>{r[1]}</td>
-                        <td><span style={{fontFamily:'monospace',fontSize:11,color:'var(--accent-light)'}}>{r[2]}</span></td>
-                        <td>{r[3]}</td>
-                        <td><span className={`status status-${r[4]}`}>{r[4] === 'active' ? 'Actif' : 'Inactif'}</span></td>
-                        <td style={{color:'var(--success)'}}>{r[5]}</td>
+                        <td>Filleul #{i + 1}</td>
+                        <td style={{ color: '#6B5E8A' }}>{c.month}</td>
+                        <td><span style={{ background: '#10B98122', color: '#10B981', fontSize: 10, padding: '2px 8px', borderRadius: 20 }}>Actif</span></td>
+                        <td style={{ color: '#10B981', fontWeight: 600 }}>{parseFloat(c.amount).toFixed(2)} €</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              )}
+            </div>
+          </>}
+
+          {/* PARRAINAGE */}
+          {page === 'parrainage' && <>
+            <div style={s.section}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Mon code de parrainage</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <div style={{ background: theme.accent + '22', color: theme.light, fontFamily: 'monospace', fontSize: 16, fontWeight: 700, padding: '10px 18px', borderRadius: 10, border: `1px solid ${theme.accent}`, letterSpacing: '0.1em' }}>
+                  {user.referralCode || 'CODE-ADMIN1'}
+                </div>
+                <button style={s.btnOutline} onClick={copyLink}>{copied ? '✓ Copié !' : 'Copier le lien'}</button>
               </div>
-            </>
-          )}
+              <div style={{ background: theme.card2, borderRadius: 8, padding: 10, fontSize: 11, color: '#6B5E8A', wordBreak: 'break-all', marginBottom: 12 }}>
+                https://mydaash.vercel.app/subscribe?ref={user.referralCode || 'CODE-ADMIN1'}
+              </div>
+              <div style={{ fontSize: 13, color: '#6B5E8A' }}>
+                Partage ce lien — tu gagnes <strong style={{ color: theme.light }}>1€/mois</strong> pour chaque personne abonnée avec ton code.
+              </div>
+            </div>
+            <div style={s.section}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Comment ça marche</div>
+              {[['1', 'Partage ton lien', 'Envoie-le à tes contacts, sur les réseaux, par email...'], ['2', "Ils s'abonnent", 'Ils créent leur compte avec ton code'], ['3', 'Tu gagnes', '1€ automatiquement chaque mois']].map(([n, t, sub]) => (
+                <div key={n} style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: theme.accent + '22', border: `1px solid ${theme.accent}`, color: theme.light, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{n}</div>
+                  <div><div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{t}</div><div style={{ fontSize: 11, color: '#6B5E8A' }}>{sub}</div></div>
+                </div>
+              ))}
+            </div>
+          </>}
+
+          {/* ADMIN */}
+          {page === 'admin' && isAdmin && <>
+            <div style={s.grid4}>
+              {[
+                { label: 'Clients totaux', value: allUsers.length },
+                { label: 'Actifs', value: allUsers.filter(u => u.subscription_status === 'active').length },
+                { label: 'MRR brut', value: `${(allUsers.filter(u => u.subscription_status === 'active').length * 3.99).toFixed(2)} €` },
+                { label: 'Revenu net', value: `${(allUsers.filter(u => u.subscription_status === 'active').length * 2.99).toFixed(2)} €` },
+              ].map((m, i) => (
+                <div key={i} style={s.metric}>
+                  <div style={{ fontSize: 10, color: '#6B5E8A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{m.label}</div>
+                  <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 700 }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={s.section}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Tous les clients</div>
+              {allUsers.length === 0 ? (
+                <div style={s.empty}>
+                  <div style={{ fontSize: 28, opacity: 0.4, marginBottom: 10 }}>⊞</div>
+                  <div style={{ fontSize: 13 }}>Aucun client encore — partage MyDaash !</div>
+                </div>
+              ) : (
+                <table>
+                  <thead><tr><th>Nom</th><th>Email</th><th>Code parrainage</th><th>Statut</th><th>Rôle</th></tr></thead>
+                  <tbody>
+                    {allUsers.map((u, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 500 }}>{u.full_name || '—'}</td>
+                        <td style={{ color: '#6B5E8A' }}>{u.email}</td>
+                        <td><span style={{ fontFamily: 'monospace', fontSize: 11, color: theme.light }}>{u.referral_code || '—'}</span></td>
+                        <td><span style={{ background: u.subscription_status === 'active' ? '#10B98122' : '#F59E0B22', color: u.subscription_status === 'active' ? '#10B981' : '#F59E0B', fontSize: 10, padding: '2px 8px', borderRadius: 20 }}>{u.subscription_status === 'active' ? 'Actif' : 'Inactif'}</span></td>
+                        <td style={{ color: u.role === 'admin' ? theme.light : '#6B5E8A' }}>{u.role}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>}
         </div>
       </div>
     </>
   );
 }
+
